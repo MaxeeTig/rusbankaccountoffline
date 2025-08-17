@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Валидатор банковского счёта</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .autocomplete {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        #bic-results {
+            position: absolute;
+            border: 1px solid #ddd;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+            background: white;
+            z-index: 100;
+            display: none;
+        }
+        .bic-result {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .bic-result:hover {
+            background-color: #f5f5f5;
+        }
+        .bank-info {
+            padding: 10px;
+            margin: 10px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        #result {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .valid { background: #d4edda; color: #155724; }
+        .invalid { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Проверка банковского счёта</h1>
+    
+    <div class="autocomplete">
+        <label for="bic">БИК банка:</label>
+        <input type="text" id="bic" placeholder="Начните вводить БИК или название">
+        <div id="bic-results"></div>
+        <div id="bank-info" class="bank-info"></div>
+    </div>
+    
+    <div>
+        <label for="account">Номер счёта (20 цифр):</label>
+        <input type="text" id="account" placeholder="Введите номер счёта">
+    </div>
+    
+    <button id="validate-btn">Проверить</button>
+    
+    <div id="result"></div>
+
+    <script>
+        // Load BIC data
+        let bicDatabase = {};
+        
+		async function loadBICData() {
+			try {
+				// Try loading from subdirectory
+				const response = await fetch('rusbic_data/bic_directory.json');
+				
+				if (!response.ok) {
+					// Fallback to same directory if subdirectory not found
+					const fallbackResponse = await fetch('bic_directory.json');
+					if (!fallbackResponse.ok) throw new Error('File not found');
+					bicDatabase = await fallbackResponse.json();
+				} else {
+					bicDatabase = await response.json();
+				}
+				
+				console.log(`Successfully loaded ${Object.keys(bicDatabase).length} BICs`);
+				return true;
+			} catch (error) {
+				console.error('BIC data loading failed:', error);
+				return false;
+			}
+		}
+
+        
+        // Autocomplete functionality
+        const bicInput = document.getElementById('bic');
+        const resultsContainer = document.getElementById('bic-results');
+        const bankInfo = document.getElementById('bank-info');
+        
+        bicInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            resultsContainer.innerHTML = '';
+            
+            if (query.length < 2) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+            
+            // Find matches in BIC or bank name
+            const matches = Object.entries(bicDatabase)
+                .filter(([bic, name]) => 
+                    bic.includes(query) || 
+                    name.toLowerCase().includes(query))
+                .slice(0, 10);
+            
+            if (matches.length > 0) {
+                matches.forEach(([bic, name]) => {
+                    const div = document.createElement('div');
+                    div.className = 'bic-result';
+                    div.innerHTML = `<strong>${bic}</strong> - ${name}`;
+                    div.addEventListener('click', () => {
+                        bicInput.value = bic;
+                        showBankInfo(bic, name);
+                        resultsContainer.style.display = 'none';
+                    });
+                    resultsContainer.appendChild(div);
+                });
+                resultsContainer.style.display = 'block';
+            } else {
+                resultsContainer.style.display = 'none';
+            }
+        });
+        
+        function showBankInfo(bic, name) {
+            bankInfo.innerHTML = `
+                <h3>${name}</h3>
+                <p><strong>БИК:</strong> ${bic}</p>
+            `;
+        }
+        
+        // Account validation (your existing code)
+        function validateBankAccount(account, bic) {
+            // ... your existing validation logic ...
+        }
+        
+        // Setup validation button
+        document.getElementById('validate-btn').addEventListener('click', function() {
+            const account = document.getElementById('account').value.trim();
+            const bic = document.getElementById('bic').value.trim();
+            
+            if (!bic || !account) {
+                showResult('Введите БИК и номер счёта', false);
+                return;
+            }
+            
+            if (!(bic in bicDatabase)) {
+                showResult('БИК не найден в справочнике', false);
+                return;
+            }
+            
+            const isValid = validateBankAccount(account, bic);
+            showResult(isValid ? 'Счёт корректный' : 'Счёт некорректный', isValid);
+        });
+        
+        function showResult(message, isValid) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = isValid ? 'valid' : 'invalid';
+            resultDiv.style.display = 'block';
+        }
+        
+        // Initialize
+        // Usage:
+		loadBICData().then(loaded => {
+			if (!loaded) {
+				document.getElementById('bank-info').innerHTML = 
+					'Не удалось загрузить справочник БИК';
+			}
+});
+    </script>
+</body>
+</html>
